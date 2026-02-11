@@ -1,0 +1,8 @@
+{
+  "name": "embeddings",
+  "dimension": 1024,
+  "metric": "Cosine",
+  "point_count": 0,
+  "storage_mode": "full",
+  "metadata_only": false
+}

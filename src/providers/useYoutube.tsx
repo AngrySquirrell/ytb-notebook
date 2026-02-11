@@ -1,37 +1,61 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createContext, ReactNode, useContext } from "react";
+import { CaptionItems, YoutubeVideoMetadata } from "../types/video";
 
 interface YoutubeProviderProps {
   children: ReactNode;
 }
 
-interface CaptionItem {
-  text: string;
-  start: number;
-  duration: number;
-}
 interface YoutubeContextType {
-  getTranscripts: (videoId: string) => Promise<CaptionItem[]>;
+  getTranscripts: (videoId: string) => Promise<CaptionItems>;
+  getVideoData: (url: string) => Promise<YoutubeVideoMetadata | null>;
 }
 
 const YoutubeContext = createContext<YoutubeContextType | undefined>(undefined);
 
 export function YoutubeProvider({ children }: YoutubeProviderProps) {
-  const getTranscripts = async (videoId: string): Promise<CaptionItem[]> => {
+  const getTranscripts = async (videoId: string): Promise<CaptionItems> => {
     try {
-      const captions = await invoke<CaptionItem[]>("get_youtube_captions", {
+      const response = await invoke<any>("get_youtube_captions", {
         videoId,
       });
-      console.log("Sous-titres récupérés :", captions);
-      return captions;
+
+      if (response && response.events) {
+        return response.events.map((event: any) => ({
+          text: event.segs
+            ? event.segs.map((seg: any) => seg.utf8).join("")
+            : "",
+          start: event.tStartMs,
+          duration: event.dDurationMs,
+        }));
+      }
+
+      return [];
     } catch (error) {
       console.error("Erreur lors de la récupération :", error);
+      return [];
     }
-    return [];
+  };
+  const getVideoData = async (
+    url: string,
+  ): Promise<YoutubeVideoMetadata | null> => {
+    try {
+      const response = await invoke<YoutubeVideoMetadata>(
+        "get_youtube_videodata",
+        {
+          url,
+        },
+      );
+      console.log("Video data retrieved:", response);
+      return response;
+    } catch (error) {
+      console.error("Error fetching video data:", error);
+      return null;
+    }
   };
 
   return (
-    <YoutubeContext.Provider value={{ getTranscripts }}>
+    <YoutubeContext.Provider value={{ getTranscripts, getVideoData }}>
       {children}
     </YoutubeContext.Provider>
   );

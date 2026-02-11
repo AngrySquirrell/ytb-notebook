@@ -1,0 +1,8 @@
+{
+  "name": "videos",
+  "dimension": 1,
+  "metric": "Cosine",
+  "point_count": 0,
+  "storage_mode": "full",
+  "metadata_only": false
+}

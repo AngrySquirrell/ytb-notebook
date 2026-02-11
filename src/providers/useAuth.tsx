@@ -12,22 +12,8 @@ import {
   TokenResponse,
   SignInOptions,
 } from "@choochmeque/tauri-plugin-google-auth-api";
-
-interface AuthConfig {
-  clientId: string;
-  clientSecret?: string; // Required for desktop
-  scopes: string[];
-  redirectUri?: string;
-}
-
-interface UserData {
-  email?: string;
-  name?: string;
-  picture?: string;
-  given_name?: string;
-  family_name?: string;
-  [key: string]: any; // For any additional fields in the ID token
-}
+import { AuthConfig, UserData } from "../types/auth";
+import { useDatabase } from "./useDatabase";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -38,6 +24,7 @@ interface AuthContextType {
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  restoreSession: (tokens: TokenResponse) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,6 +41,32 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null);
 
   const isAuthenticated = !!tokens?.accessToken;
+
+  const _parseJWT = (token: string) => {
+    try {
+      const payload = token.split(".")[1];
+      const decoded = atob(payload);
+      return JSON.parse(decoded);
+    } catch (err) {
+      console.error("Failed to parse JWT:", err);
+      return null;
+    }
+  };
+
+  const restoreSession = useCallback((tokens: TokenResponse) => {
+    setTokens(tokens);
+    if (tokens.idToken) {
+      const idTokenData = _parseJWT(tokens.idToken);
+      setUserData({
+        email: idTokenData?.email,
+        name: idTokenData?.name,
+        picture: idTokenData?.picture,
+        given_name: idTokenData?.given_name,
+        family_name: idTokenData?.family_name,
+        ...idTokenData,
+      });
+    }
+  }, []);
 
   const signIn = useCallback(async () => {
     setLoading(true);
@@ -78,7 +91,8 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
         family_name: idTokenData?.family_name,
         ...idTokenData, // Include any additional fields from the ID token
       });
-      console.log("Sign-in successful:", response);
+
+      console.log("Sign-in successful:", { response, userData: idTokenData });
     } catch (err: any) {
       console.error("Sign in failed:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -130,17 +144,6 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
     }
   }, [config, tokens]);
 
-  const _parseJWT = (token: string) => {
-    try {
-      const payload = token.split(".")[1];
-      const decoded = atob(payload);
-      return JSON.parse(decoded);
-    } catch (err) {
-      console.error("Failed to parse JWT:", err);
-      return null;
-    }
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -152,6 +155,7 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
         signIn,
         signOut,
         refresh,
+        restoreSession,
       }}
     >
       {children}

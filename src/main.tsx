@@ -3,11 +3,30 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AuthProvider } from "./providers/useAuth";
 import { YoutubeProvider } from "./providers/useYoutube";
+import { DatabaseProvider } from "./providers/useDatabase";
 import { createTheme, MantineProvider } from "@mantine/core";
+import { createBrowserRouter, RouterProvider } from "react-router";
+import Dashboard from "./pages/Dashboard";
+import Settings from "./pages/Settings";
 
-const theme = createTheme({
-  /** Put your mantine theme override here */
-});
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <App />,
+    children: [
+      {
+        path: "/",
+        element: <Dashboard />,
+      },
+      {
+        path: "/settings",
+        element: <Settings />,
+      },
+    ],
+  },
+]);
+
+const theme = createTheme({});
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -21,11 +40,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI,
       }}
     >
-      <YoutubeProvider>
-        <MantineProvider theme={theme} defaultColorScheme="dark">
-          <App />
-        </MantineProvider>
-      </YoutubeProvider>
+      <DatabaseProvider>
+        <YoutubeProvider>
+          <MantineProvider theme={theme} defaultColorScheme="dark">
+            <RouterProvider router={router} />
+          </MantineProvider>
+        </YoutubeProvider>
+      </DatabaseProvider>
     </AuthProvider>
   </React.StrictMode>,
 );

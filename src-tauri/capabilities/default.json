@@ -8,6 +8,9 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "google-auth:default"
+    "google-auth:default",
+    "velesdb:default",
+    "velesdb:allow-get-points",
+    "velesdb:allow-delete-points"
   ]
 }

@@ -1,0 +1,7 @@
+.youtubeChannel:hover {
+  background-color: var(--mantine-color-dark-5);
+  transition: 0.2s;
+}
+.youtubeChannel {
+  transition: 0.2s;
+}
