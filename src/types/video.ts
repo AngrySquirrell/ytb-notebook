@@ -1,7 +1,7 @@
-export interface CaptionItem {
+export interface CaptionChunk {
   text: string;
-  start: number;
-  duration: number;
+  start: number; // in seconds
+  duration: number; // in seconds
 }
 
 export interface YoutubeVideoMetadata {
@@ -10,7 +10,7 @@ export interface YoutubeVideoMetadata {
   thumbnail: string;
   duration: string;
   viewCount: string;
-  videoId: string;
+  video_id: string;
   publishDate: string;
   channelName: string;
   channelUrl: string;
@@ -18,6 +18,27 @@ export interface YoutubeVideoMetadata {
   subscriberCount: string;
   isVerified: boolean;
   likesAmount: string;
+  transcript?: YoutubeCaptions["metadata"];
 }
 
-export type CaptionItems = CaptionItem[];
+export interface YoutubeAvailableCaptions {
+  video_id: string;
+  available_languages: {
+    language: string;
+    language_code: string;
+    is_generated: boolean;
+    is_translatable: boolean;
+  }[];
+}
+export interface YoutubeCaptions {
+  metadata: {
+    video_id: string;
+    language: string;
+    language_code: string;
+    is_generated: boolean;
+  };
+  captions: string;
+  chunks: CaptionChunk[];
+}
+
+export type CaptionItems = CaptionChunk[];
