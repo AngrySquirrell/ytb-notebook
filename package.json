@@ -18,6 +18,7 @@
     "@mantine/hooks": "^8.3.14",
     "@mantine/modals": "^8.3.14",
     "@mantine/notifications": "^8.3.14",
+    "@tabler/icons-react": "^3.38.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@wiscale/tauri-plugin-velesdb": "^1.4.1",
@@ -25,6 +26,7 @@
     "embla-carousel-react": "^8.5.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
     "react-router": "^7.13.0",
     "recharts": "^3.7.0"
   },
