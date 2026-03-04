@@ -6,7 +6,6 @@ import "./App.css";
 import Navbar from "./layout/Navbar";
 
 function App() {
-  // const { tokens, userData, signIn, signOut } = useAuth();
   const [opened, { toggle }] = useDisclosure();
   return (
     <AppShell

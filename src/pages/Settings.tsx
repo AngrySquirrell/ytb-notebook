@@ -8,6 +8,7 @@ import {
   Paper,
   Text,
   LoadingOverlay,
+  Divider,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useEffect } from "react";
@@ -28,6 +29,7 @@ export default function Settings() {
     initialValues: {
       mistralToken: "",
       mistralModel: "mistral-tiny",
+      openRouterToken: "",
     },
   });
 
@@ -36,6 +38,7 @@ export default function Settings() {
       form.setValues({
         mistralToken: settings.mistralToken || "",
         mistralModel: settings.mistralModel || "mistral-tiny",
+        openRouterToken: settings.openRouterToken || "",
       });
     }
   }, [settings]);
@@ -47,6 +50,7 @@ export default function Settings() {
         authStore: settings?.authStore || {},
         mistralToken: values.mistralToken,
         mistralModel: values.mistralModel,
+        openRouterToken: values.openRouterToken,
       };
 
       await saveSettings(newSettings);
@@ -76,6 +80,18 @@ export default function Settings() {
 
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack>
+            <Text fw={500} size="lg">
+              OpenRouter Configuration (Embeddings)
+            </Text>
+
+            <TextInput
+              label="API Token"
+              placeholder="Enter your OpenRouter API token"
+              description="You can find this in your OpenRouter console"
+              type="password"
+              {...form.getInputProps("openRouterToken")}
+            />
+            <Divider my="sm" />
             <Text fw={500} size="lg">
               Mistral AI Configuration
             </Text>

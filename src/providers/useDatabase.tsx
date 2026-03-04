@@ -15,7 +15,7 @@ import {
 } from "@wiscale/tauri-plugin-velesdb";
 import { useAuth } from "./useAuth";
 import { TokenResponse } from "@choochmeque/tauri-plugin-google-auth-api";
-import { CaptionItems } from "../types/video";
+import { CaptionItems, YoutubeCaptions } from "../types/video";
 
 // --- Types ---
 
@@ -25,6 +25,7 @@ export interface VideoMetadata {
   views: number;
   likes: number;
   publishedDate: string;
+  transcript?: YoutubeCaptions["metadata"];
 }
 
 export interface Video {
@@ -39,6 +40,7 @@ export interface Settings {
   authStore: Partial<TokenResponse>; // Store tokens
   mistralToken: string;
   mistralModel: string;
+  openRouterToken: string;
 }
 
 interface DatabaseContextType {
@@ -93,7 +95,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         if (!collectionNames.includes(EMBEDDINGS_COLLECTION)) {
           await createCollection({
             name: EMBEDDINGS_COLLECTION,
-            dimension: 1024,
+            dimension: 2048,
           });
         }
 

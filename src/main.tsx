@@ -8,6 +8,10 @@ import { createTheme, MantineProvider } from "@mantine/core";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
+import EmbeddedVideos from "./pages/EmbeddedVideos";
+import VectorialDatabase from "./pages/VectorialDatabase";
+import Chatbot from "./pages/Chatbot";
+import { LLMProvider } from "./providers/useLLM";
 
 const router = createBrowserRouter([
   {
@@ -21,6 +25,18 @@ const router = createBrowserRouter([
       {
         path: "/settings",
         element: <Settings />,
+      },
+      {
+        path: "/embedded-videos",
+        element: <EmbeddedVideos />,
+      },
+      {
+        path: "/vectorial-database",
+        element: <VectorialDatabase />,
+      },
+      {
+        path: "/chatbot",
+        element: <Chatbot />,
       },
     ],
   },
@@ -41,11 +57,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       }}
     >
       <DatabaseProvider>
-        <YoutubeProvider>
-          <MantineProvider theme={theme} defaultColorScheme="dark">
-            <RouterProvider router={router} />
-          </MantineProvider>
-        </YoutubeProvider>
+        <LLMProvider>
+          <YoutubeProvider>
+            <MantineProvider theme={theme} defaultColorScheme="dark">
+              <RouterProvider router={router} />
+            </MantineProvider>
+          </YoutubeProvider>
+        </LLMProvider>
       </DatabaseProvider>
     </AuthProvider>
   </React.StrictMode>,

@@ -1,6 +1,7 @@
 import {
   Avatar,
   Button,
+  Divider,
   Group,
   Menu,
   Stack,
@@ -8,7 +9,8 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { useAuth } from "../providers/useAuth";
-import { useNavigate } from "react-router";
+import { NavLink, useNavigate } from "react-router";
+import { IconVideoPlus } from "@tabler/icons-react";
 
 const Navbar = () => {
   const { isAuthenticated, userData, signIn, signOut } = useAuth();
@@ -26,56 +28,39 @@ const Navbar = () => {
           Menu
         </Text>
 
-        <UnstyledButton
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "8px 12px",
-            borderRadius: "4px",
-            color: "var(--mantine-color-text)",
-            "&:hover": { backgroundColor: "var(--mantine-color-gray-0)" },
-          }}
-        >
+        <Button rightSection={<IconVideoPlus />} component={NavLink} to={"/"}>
+          <Group>
+            <Text size="sm" fw={500}>
+              Submit a video
+            </Text>
+          </Group>
+        </Button>
+
+        <Divider my="sm" mx={24} />
+
+        <Button variant="light" component={NavLink} to={"/embedded-videos"}>
           <Group>
             <Text size="sm" fw={500}>
               Embedded videos
             </Text>
           </Group>
-        </UnstyledButton>
+        </Button>
 
-        <UnstyledButton
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "8px 12px",
-            borderRadius: "4px",
-            color: "var(--mantine-color-text)",
-            "&:hover": { backgroundColor: "var(--mantine-color-gray-0)" },
-          }}
-        >
+        <Button variant="light" component={NavLink} to={"/vectorial-database"}>
           <Group>
             <Text size="sm" fw={500}>
               Vectorial database
             </Text>
           </Group>
-        </UnstyledButton>
+        </Button>
 
-        <UnstyledButton
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "8px 12px",
-            borderRadius: "4px",
-            color: "var(--mantine-color-text)",
-            "&:hover": { backgroundColor: "var(--mantine-color-gray-0)" },
-          }}
-        >
+        <Button variant="light" component={NavLink} to={"/chatbot"}>
           <Group>
             <Text size="sm" fw={500}>
               Chatbot
             </Text>
           </Group>
-        </UnstyledButton>
+        </Button>
       </Stack>
 
       <div
