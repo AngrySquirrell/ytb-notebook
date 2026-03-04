@@ -1,0 +1,5 @@
+- [ ] Possibilité de clear la/les DBs (embeddings, videos, chat_history)
+- [ ] Régler les problèmes de persistances des données
+- [ ] Empêcher l'utilisation de l'app si pas connecté
+- [ ] Déployer le youtube caption scrapper
+- [ ] Régler le problème de route de la DB, le créer dans `%appdata%/youtube-notebook/vbd`
