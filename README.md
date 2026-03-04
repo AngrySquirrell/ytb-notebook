@@ -3,3 +3,5 @@ This template should help get you started developing with Tauri, React and Types
 
 Recommended IDE Setup
 VS Code + Tauri + rust-analyzer "# ytb-notebook"
+
+npx tauri dev
