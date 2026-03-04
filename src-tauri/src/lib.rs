@@ -12,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![ 
             extract_youtube::get_youtube_captions,
             extract_youtube::get_youtube_videodata,
+            extract_youtube::get_available_youtube_captions_list,
             llm::generate_context_chunks,
             llm::generate_embedding,
             llm::generate_chatbot_answer

@@ -2,27 +2,97 @@ use tauri::command;
 use serde_json::{json, Value};
 use reqwest::Client;
 use regex::Regex;
-use ytt::YouTubeTranscript;
+
+const CAPTIONS_API_URL: &str = "http://localhost:8081"; // Local API endpoint for fetching captions
 
 #[command]
-pub async fn get_youtube_captions(video_id: String) -> Result<serde_json::Value, String> {
-    let api = YouTubeTranscript::new();
-    let languages = vec!["en", "fr"];
-    
-    let transcript_res = api.fetch_transcript(&video_id, Some(languages))
-        .await
-        .map_err(|e| e.to_string())?;
+pub async fn get_youtube_captions(video_id: String, languages: Vec<String>, ) -> Result<String, String> {
+    let url = format!("{}/fetch", CAPTIONS_API_URL); // video_id is to be sent in the body as JSON { "video_id": "..." }
 
-    let items: Vec<Value> = transcript_res.transcript.into_iter().map(|item| {
-        json!({
-            "text": item.text, 
-            "start": item.start, 
-            "duration": item.duration
-        })
-    }).collect();
+    let client = Client::new();
+    let res = client.post(&url)
+        .json(&json!({ "video_id": video_id, "languages": languages, "preserve_formatting": true }))
+        .send().await.map_err(|e| e.to_string())?;
+    let captions = res.text().await.map_err(|e| e.to_string())?;
 
-    Ok(json!(items))
+    let captions_json: Value = serde_json::from_str(&captions).map_err(|e| e.to_string())?;
+    let metadata = captions_json.as_object().unwrap().iter()
+        .filter(|(k, _)| k.as_str() != "snippets")
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect::<serde_json::Map<String, Value>>();
+    let snippets = captions_json.get("snippets").cloned().unwrap_or(json!([]));
+    let result = json!({
+        "metadata": metadata,
+        "captions": snippets.as_array().unwrap_or(&vec![]).iter().map(|s| s.get("text").and_then(|t| t.as_str()).unwrap_or("")).collect::<Vec<&str>>().join(" "),
+        "chunks": snippets
+    });
+
+    // {
+    //     "metadata": {
+    //         "video_id": "dQw4w9WgXcQ",
+    //         "language": "English",
+    //         "language_code": "en",
+    //         "is_generated": false
+    //     },
+    //     "captions": "..." // as plain string
+    //     "chunks": [
+    //         {
+    //             "text": "...",
+    //             "start": 1.36,
+    //             "duration": 1.68
+    //         },
+    //         {...}
+    //     ]
+    // }
+
+    Ok(result.to_string())
 }
+
+
+#[command]
+pub async fn get_available_youtube_captions_list(video_id: String) -> Result<String, String> {
+    let url = format!("{}/list", CAPTIONS_API_URL);
+    print!("Fetching available captions for video ID: {}", video_id);
+    let client = Client::new();
+    let res = client.post(&url)
+        .json(&json!({ "video_id": video_id }))
+        .send().await.map_err(|e| {
+            eprintln!("Error sending request: {}", e);
+            e.to_string()
+        })?;
+
+    // return 
+    // {
+    //     "video_id": "dQw4w9WgXcQ",
+    //     available_languages: [
+    //         {
+    //             "language": "English",
+    //   "language_code": "en",
+    //   "is_generated": false,
+    //   "is_translatable": true,
+    //         }
+    //     ]  
+    // }
+
+    let captions = res.text().await.map_err(|e| e.to_string())?;
+    let captions_json: Value = serde_json::from_str(&captions).map_err(|e| e.to_string())?;
+    let video_id = captions_json.get("video_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let transcripts = captions_json.get("transcripts").and_then(|t| t.as_array()).unwrap_or(&vec![]).iter().map(|t| {
+        json!({
+            "language": t.get("language").and_then(|l| l.as_str()).unwrap_or(""),
+            "language_code": t.get("language_code").and_then(|c| c.as_str()).unwrap_or(""),
+            "is_generated": t.get("is_generated").and_then(|g| g.as_bool()).unwrap_or(false),
+            "is_translatable": t.get("is_translatable").and_then(|tr| tr.as_bool()).unwrap_or(false),
+        })
+    }).collect::<Vec<Value>>();
+
+
+    Ok(json!({
+        "video_id": video_id,
+        "available_languages": transcripts
+    }).to_string())
+}
+
 
 #[command]
 pub async fn get_youtube_videodata(url: String) -> Result<serde_json::Value, String> {
@@ -63,7 +133,7 @@ pub async fn get_youtube_videodata(url: String) -> Result<serde_json::Value, Str
             result["description"] = details.get("shortDescription").cloned().unwrap_or(json!(""));
             result["duration"] = details.get("lengthSeconds").cloned().unwrap_or(json!("0"));
             result["viewCount"] = details.get("viewCount").cloned().unwrap_or(json!("0"));
-            result["videoId"] = details.get("videoId").cloned().unwrap_or(json!(""));
+            result["video_id"] = details.get("video_id").cloned().unwrap_or(json!(""));
             
             // Get highest quality thumbnail
             if let Some(thumbs) = details.get("thumbnail").and_then(|t| t.get("thumbnails")).and_then(|t| t.as_array()) {

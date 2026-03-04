@@ -1,6 +1,9 @@
 use mistral_api_client::{MistralClient};
 use reqwest::Client;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CaptionItem {
@@ -25,7 +28,9 @@ struct EmbeddingData {
     embedding: Vec<f32>,
 }
 
-const MISTRAL_API_URL: &str = "https://api.mistral.ai/v1";
+const OPENROUTER_EMBEDDINGS_API_URL: &str = "https://openrouter.ai/api/v1/embeddings";
+const OPENROUTER_TIMEOUT_SECS: u64 = 30;
+const OPENROUTER_MAX_RETRIES: usize = 3;
 
 /// Transform caption items into text chunks for embedding using a Light LLM
 /// Aggregates text and asks the LLM to refine it for embedding
@@ -80,36 +85,78 @@ pub async fn generate_context_chunks(
     Ok(refined_chunks)
 }
 
-/// Generate embeddings for a list of text chunks using Mistral API
+/// Generate embeddings for a list of text chunks using OpenRouter API
 #[tauri::command]
-pub async fn generate_embedding(api_token: String, chunks: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
-    let client = Client::new();
+pub async fn generate_embedding(api_token: String, model: Option<String>, chunks: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
+    if chunks.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(OPENROUTER_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     
-    // Mistral API call
+    // OpenRouter embeddings API call
     let request_body = EmbeddingRequest {
-        model: "mistral-embed".to_string(),
+        model: model.unwrap_or_else(|| "nvidia/llama-nemotron-embed-vl-1b-v2:free".to_string()),
         input: chunks,
     };
 
-    let response = client
-        .post(format!("{}/embeddings", MISTRAL_API_URL))
-        .bearer_auth(api_token)
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+    let mut last_error = String::from("Unknown OpenRouter error");
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("Mistral API error {}: {}", status, error_text));
+    for attempt in 0..=OPENROUTER_MAX_RETRIES {
+        let response_result = client
+            .post(OPENROUTER_EMBEDDINGS_API_URL)
+            .bearer_auth(&api_token)
+            .json(&request_body)
+            .send()
+            .await;
+
+        match response_result {
+            Ok(response) => {
+                let status = response.status();
+
+                if status.is_success() {
+                    let response_body: EmbeddingResponse = response
+                        .json()
+                        .await
+                        .map_err(|e| format!("OpenRouter parse error: {}", e))?;
+
+                    let embeddings: Vec<Vec<f32>> = response_body
+                        .data
+                        .into_iter()
+                        .map(|d| d.embedding)
+                        .collect();
+
+                    if embeddings.is_empty() {
+                        return Err("OpenRouter returned an empty embeddings array".to_string());
+                    }
+
+                    return Ok(embeddings);
+                }
+
+                let error_text = response.text().await.unwrap_or_default();
+                last_error = format!("OpenRouter API error {}: {}", status, error_text);
+
+                let retriable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+                if !retriable || attempt == OPENROUTER_MAX_RETRIES {
+                    return Err(last_error);
+                }
+            }
+            Err(e) => {
+                last_error = format!("OpenRouter request failed: {}", e);
+                if attempt == OPENROUTER_MAX_RETRIES {
+                    return Err(last_error);
+                }
+            }
+        }
+
+        let backoff_ms = 300_u64 * 2_u64.pow(attempt as u32);
+        sleep(Duration::from_millis(backoff_ms));
     }
 
-    let response_body: EmbeddingResponse = response.json().await.map_err(|e| format!("Parse error: {}", e))?;
-
-    let embeddings: Vec<Vec<f32>> = response_body.data.into_iter().map(|d| d.embedding).collect();
-    
-    Ok(embeddings)
+    Err(last_error)
 }
 
 /// Generate a chatbot answer based on the user's question and retrieved context
