@@ -13,7 +13,6 @@ import {
   SignInOptions,
 } from "@choochmeque/tauri-plugin-google-auth-api";
 import { AuthConfig, UserData } from "../types/auth";
-import { useDatabase } from "./useDatabase";
 
 interface AuthContextType {
   isAuthenticated: boolean;

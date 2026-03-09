@@ -6,7 +6,7 @@ import "./App.css";
 import Navbar from "./layout/Navbar";
 
 function App() {
-  const [opened, { toggle }] = useDisclosure();
+  const [opened] = useDisclosure();
   return (
     <AppShell
       navbar={{
