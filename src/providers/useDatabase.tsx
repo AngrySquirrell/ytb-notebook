@@ -216,7 +216,11 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         query: `SELECT * FROM ${VIDEOS_COLLECTION}`,
       });
 
-      return response.results.map((r) => r.payload as unknown as Video);
+      const rows = (response.results || []) as {
+        payload?: Record<string, unknown>;
+      }[];
+
+      return rows.map((row) => row.payload as unknown as Video);
     } catch (e) {
       console.error("Error fetching videos:", e);
       return [];

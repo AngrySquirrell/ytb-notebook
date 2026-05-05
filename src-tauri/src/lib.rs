@@ -43,6 +43,6 @@ pub fn run() {
             llm::generate_embedding,
             llm::generate_chatbot_answer
         ])
-        .run(tauri::Context::default())
+        .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
