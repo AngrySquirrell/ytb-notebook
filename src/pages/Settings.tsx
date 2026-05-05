@@ -172,7 +172,7 @@ export default function Settings() {
               Les changements de thème sont appliqués et sauvegardés
               immédiatement.
             </Text>
-            <Grid gutter="md">
+            <Grid>
               {Object.keys(APP_THEMES).map((themeName) => {
                 const themeData = APP_THEMES[themeName];
                 // Extraction des couleurs principales
