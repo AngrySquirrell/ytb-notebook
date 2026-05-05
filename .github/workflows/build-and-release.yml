@@ -72,7 +72,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Tauri Windows app
         run: npm run tauri build
