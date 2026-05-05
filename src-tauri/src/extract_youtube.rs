@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tauri::command;
 
-const CAPTIONS_API_URL: &str = "http://localhost:8081"; // Local API endpoint for fetching captions
+const CAPTIONS_API_URL: &str = "https://ytb-transcript.angrysquirrel.fr"; // Local API endpoint for fetching captions
 
 #[command]
 pub async fn get_youtube_captions(
