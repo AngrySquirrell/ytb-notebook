@@ -1,4 +1,4 @@
-use mistral_api_client::{MistralClient};
+use mistral_api_client::MistralClient;
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -13,24 +13,38 @@ pub struct CaptionItem {
 }
 
 #[derive(Serialize)]
-struct EmbeddingRequest {
+struct GeminiPart {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct GeminiContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Serialize)]
+struct GeminiEmbeddingRequestItem {
     model: String,
-    input: Vec<String>,
+    content: GeminiContent,
+}
+
+#[derive(Serialize)]
+struct GeminiBatchEmbeddingRequest {
+    requests: Vec<GeminiEmbeddingRequestItem>,
 }
 
 #[derive(Deserialize)]
-struct EmbeddingResponse {
-    data: Vec<EmbeddingData>,
+struct GeminiEmbeddingValues {
+    values: Vec<f32>,
 }
 
 #[derive(Deserialize)]
-struct EmbeddingData {
-    embedding: Vec<f32>,
+struct GeminiBatchEmbeddingResponse {
+    embeddings: Vec<GeminiEmbeddingValues>,
 }
 
-const OPENROUTER_EMBEDDINGS_API_URL: &str = "https://openrouter.ai/api/v1/embeddings";
-const OPENROUTER_TIMEOUT_SECS: u64 = 30;
-const OPENROUTER_MAX_RETRIES: usize = 3;
+const GOOGLE_TIMEOUT_SECS: u64 = 30;
+const GOOGLE_MAX_RETRIES: usize = 3;
 
 /// Transform caption items into text chunks for embedding using a Light LLM
 /// Aggregates text and asks the LLM to refine it for embedding
@@ -43,7 +57,7 @@ pub async fn generate_context_chunks(
     // We group raw text into ~3000 chars (~750 tokens) to allow the light LLM to process it
     // and produce a coherent chunk that fits well within the embedding context.
     let raw_chunk_size = 3000;
-    
+
     let mut raw_chunks = Vec::new();
     let mut current_chunk = String::new();
 
@@ -70,13 +84,12 @@ pub async fn generate_context_chunks(
 
         // MistralClient generate uses a string prompt as per docs example.
         // We simulate system/user interaction by formatting the prompt.
-        let prompt = format!(
-            "{}\n\nTranscript Segment:\n{}",
-            system_prompt, chunk
-        );
-        
+        let prompt = format!("{}\n\nTranscript Segment:\n{}", system_prompt, chunk);
+
         // Using generate from mistral_api_client
-        let response = client.generate(&prompt).await
+        let response = client
+            .generate(&prompt)
+            .await
             .map_err(|e| format!("Mistral Client error: {}", e))?;
 
         refined_chunks.push(response);
@@ -85,30 +98,49 @@ pub async fn generate_context_chunks(
     Ok(refined_chunks)
 }
 
-/// Generate embeddings for a list of text chunks using OpenRouter API
+/// Generate embeddings for a list of text chunks using Google Gemini API
 #[tauri::command]
-pub async fn generate_embedding(api_token: String, model: Option<String>, chunks: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
+pub async fn generate_embedding(
+    api_token: String,
+    model: Option<String>,
+    chunks: Vec<String>,
+) -> Result<Vec<Vec<f32>>, String> {
     if chunks.is_empty() {
         return Ok(vec![]);
     }
 
     let client = Client::builder()
-        .timeout(Duration::from_secs(OPENROUTER_TIMEOUT_SECS))
+        .timeout(Duration::from_secs(GOOGLE_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    
-    // OpenRouter embeddings API call
-    let request_body = EmbeddingRequest {
-        model: model.unwrap_or_else(|| "nvidia/llama-nemotron-embed-vl-1b-v2:free".to_string()),
-        input: chunks,
-    };
 
-    let mut last_error = String::from("Unknown OpenRouter error");
+    let target_model = model.unwrap_or_else(|| "gemini-embedding-2-preview".to_string());
+    let model_name = target_model.replace("google/", "");
+    let model_path = format!("models/{}", model_name);
 
-    for attempt in 0..=OPENROUTER_MAX_RETRIES {
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/{}:batchEmbedContents",
+        model_path
+    );
+
+    let requests: Vec<GeminiEmbeddingRequestItem> = chunks
+        .into_iter()
+        .map(|text| GeminiEmbeddingRequestItem {
+            model: model_path.clone(),
+            content: GeminiContent {
+                parts: vec![GeminiPart { text }],
+            },
+        })
+        .collect();
+
+    let request_body = GeminiBatchEmbeddingRequest { requests };
+
+    let mut last_error = String::from("Unknown Google API error");
+
+    for attempt in 0..=GOOGLE_MAX_RETRIES {
         let response_result = client
-            .post(OPENROUTER_EMBEDDINGS_API_URL)
-            .bearer_auth(&api_token)
+            .post(&url)
+            .header("x-goog-api-key", &api_token)
             .json(&request_body)
             .send()
             .await;
@@ -118,35 +150,35 @@ pub async fn generate_embedding(api_token: String, model: Option<String>, chunks
                 let status = response.status();
 
                 if status.is_success() {
-                    let response_body: EmbeddingResponse = response
+                    let response_body: GeminiBatchEmbeddingResponse = response
                         .json()
                         .await
-                        .map_err(|e| format!("OpenRouter parse error: {}", e))?;
+                        .map_err(|e| format!("Google API parse error: {}", e))?;
 
                     let embeddings: Vec<Vec<f32>> = response_body
-                        .data
+                        .embeddings
                         .into_iter()
-                        .map(|d| d.embedding)
+                        .map(|d| d.values)
                         .collect();
 
                     if embeddings.is_empty() {
-                        return Err("OpenRouter returned an empty embeddings array".to_string());
+                        return Err("Google API returned an empty embeddings array".to_string());
                     }
 
                     return Ok(embeddings);
                 }
 
                 let error_text = response.text().await.unwrap_or_default();
-                last_error = format!("OpenRouter API error {}: {}", status, error_text);
+                last_error = format!("Google API error {}: {}", status, error_text);
 
                 let retriable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
-                if !retriable || attempt == OPENROUTER_MAX_RETRIES {
+                if !retriable || attempt == GOOGLE_MAX_RETRIES {
                     return Err(last_error);
                 }
             }
             Err(e) => {
-                last_error = format!("OpenRouter request failed: {}", e);
-                if attempt == OPENROUTER_MAX_RETRIES {
+                last_error = format!("Google API request failed: {}", e);
+                if attempt == GOOGLE_MAX_RETRIES {
                     return Err(last_error);
                 }
             }
@@ -167,23 +199,21 @@ pub async fn generate_chatbot_answer(
     question: String,
     context: String,
 ) -> Result<String, String> {
-    
     let system_prompt = format!(
         "You are a helpful assistant. Use the following context to answer the user's question.\n\
         If the answer is not in the context, say so.\n\n\
-        Context:\n{}", 
+        Context:\n{}",
         context
     );
 
     let client = MistralClient::new(&api_token).with_model(&model);
 
     // Using generate from mistral_api_client
-    let prompt = format!(
-        "{}\n\nUser Question:\n{}",
-        system_prompt, question
-    );
+    let prompt = format!("{}\n\nUser Question:\n{}", system_prompt, question);
 
-    let response = client.generate(&prompt).await
+    let response = client
+        .generate(&prompt)
+        .await
         .map_err(|e| format!("Mistral Client error: {}", e))?;
 
     Ok(response)

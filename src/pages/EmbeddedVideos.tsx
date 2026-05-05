@@ -46,7 +46,7 @@ const EmbeddedVideos = () => {
         <div>
           <Title order={3}>Embedded videos</Title>
           <Text c="dimmed" size="sm">
-            Vue table des vidéos stockées dans VelesDB
+            Vue table des vidéos stockées
           </Text>
         </div>
         <Tooltip label="Rafraîchir">

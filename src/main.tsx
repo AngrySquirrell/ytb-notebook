@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AuthProvider } from "./providers/useAuth";
 import { YoutubeProvider } from "./providers/useYoutube";
-import { DatabaseProvider } from "./providers/useDatabase";
+import { DatabaseProvider, useDatabase } from "./providers/useDatabase";
 import { createTheme, MantineProvider } from "@mantine/core";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import Dashboard from "./pages/Dashboard";
@@ -12,6 +12,8 @@ import EmbeddedVideos from "./pages/EmbeddedVideos";
 import VectorialDatabase from "./pages/VectorialDatabase";
 import Chatbot from "./pages/Chatbot";
 import { LLMProvider } from "./providers/useLLM";
+import { ModalsProvider } from "@mantine/modals";
+import { APP_THEMES } from "./themes/index";
 
 const router = createBrowserRouter([
   {
@@ -42,7 +44,17 @@ const router = createBrowserRouter([
   },
 ]);
 
-const theme = createTheme({});
+function AppThemeProvider({ children }: { children: React.ReactNode }) {
+  const { settings } = useDatabase();
+  const themeName = settings?.theme || "Mantine";
+  const theme = createTheme(APP_THEMES[themeName] || {});
+
+  return (
+    <MantineProvider theme={theme} defaultColorScheme="dark">
+      <ModalsProvider>{children}</ModalsProvider>
+    </MantineProvider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -57,13 +69,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       }}
     >
       <DatabaseProvider>
-        <LLMProvider>
-          <YoutubeProvider>
-            <MantineProvider theme={theme} defaultColorScheme="dark">
+        <AppThemeProvider>
+          <LLMProvider>
+            <YoutubeProvider>
               <RouterProvider router={router} />
-            </MantineProvider>
-          </YoutubeProvider>
-        </LLMProvider>
+            </YoutubeProvider>
+          </LLMProvider>
+        </AppThemeProvider>
       </DatabaseProvider>
     </AuthProvider>
   </React.StrictMode>,

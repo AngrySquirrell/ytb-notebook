@@ -1,0 +1,108 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [""]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.tag_version.outputs.tag_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Tag
+        id: tag_version
+        shell: bash
+        run: |
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          BASE_TAG="v$VERSION"
+          TAG="$BASE_TAG"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG exists. Checking for suffixes..."
+            found=false
+            for char in {a..z}; do
+              CANDIDATE="${BASE_TAG}${char}"
+              if ! git rev-parse "$CANDIDATE" >/dev/null 2>&1; then
+                TAG="$CANDIDATE"
+                found=true
+                break
+              fi
+            done
+
+            if [ "$found" = false ]; then
+              echo "Error: Could not find available tag suffix for $VERSION"
+              exit 1
+            fi
+          fi
+
+          echo "Selected tag: $TAG"
+          echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: versioning
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri Windows app
+        run: npm run tauri build
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: |
+            src-tauri/target/release/ytb-notebook.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn
+
+  release:
+    needs: [versioning, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-bundle
+          path: windows-bundle
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.versioning.outputs.tag_name }}
+          name: Release ${{ needs.versioning.outputs.tag_name }}
+          files: |
+            windows-bundle/**/*
+          draft: false
+          prerelease: false

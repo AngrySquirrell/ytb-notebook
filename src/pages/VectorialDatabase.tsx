@@ -111,7 +111,7 @@ const VectorialDatabase = () => {
         <div>
           <Title order={3}>Vectorial database</Title>
           <Text c="dimmed" size="sm">
-            Vue table de la collection embeddings (VelesDB)
+            Vue table de la collection embeddings
           </Text>
         </div>
         <Tooltip label="Rafraîchir">

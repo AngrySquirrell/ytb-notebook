@@ -11,6 +11,7 @@
     "google-auth:default",
     "velesdb:default",
     "velesdb:allow-get-points",
-    "velesdb:allow-delete-points"
+    "velesdb:allow-delete-points",
+    "deep-link:default"
   ]
 }

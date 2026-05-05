@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   createCollection,
+  deleteCollection,
   upsert,
   getPoints,
   query,
@@ -40,14 +41,18 @@ export interface Settings {
   authStore: Partial<TokenResponse>; // Store tokens
   mistralToken: string;
   mistralModel: string;
-  openRouterToken: string;
+  googleEmbedToken: string;
+  theme: string;
 }
+
+export type ClearableDatabase = "embeddings" | "videos" | "chat_history";
 
 interface DatabaseContextType {
   saveVideo: (video: Video) => Promise<void>;
   getVideos: () => Promise<Video[]>;
   saveSettings: (settings: Settings) => Promise<void>;
   getSettings: () => Promise<Settings | null>;
+  clearDatabases: (collections: ClearableDatabase[]) => Promise<void>;
   settings: Settings | null;
   loading: boolean;
 }
@@ -70,6 +75,12 @@ const SETTINGS_COLLECTION = "settings";
 const VIDEOS_COLLECTION = "videos";
 const EMBEDDINGS_COLLECTION = "embeddings";
 const SETTINGS_ID = 1;
+
+const COLLECTION_DIMENSIONS: Record<ClearableDatabase, number> = {
+  embeddings: 768,
+  videos: 1,
+  chat_history: 1,
+};
 
 interface DatabaseProviderProps {
   children: ReactNode;
@@ -95,7 +106,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         if (!collectionNames.includes(EMBEDDINGS_COLLECTION)) {
           await createCollection({
             name: EMBEDDINGS_COLLECTION,
-            dimension: 2048,
+            dimension: 768,
           });
         }
 
@@ -166,7 +177,12 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         ids: [SETTINGS_ID],
       });
       if (points && points[0] && points[0].payload) {
-        return points[0].payload as unknown as Settings;
+        const dbSettings = points[0].payload as unknown as Settings;
+        // Ensure theme has a default value if missing
+        return {
+          ...dbSettings,
+          theme: dbSettings.theme || "Mantine",
+        };
       }
       return null;
     } catch (e) {
@@ -207,6 +223,30 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
     }
   }, []);
 
+  const clearDatabases = useCallback(
+    async (collections: ClearableDatabase[]) => {
+      const uniqueCollections = Array.from(new Set(collections));
+      if (uniqueCollections.length === 0) {
+        return;
+      }
+
+      const existingCollections = await listCollections();
+      const existingNames = new Set(existingCollections.map((c) => c.name));
+
+      for (const collection of uniqueCollections) {
+        if (existingNames.has(collection)) {
+          await deleteCollection(collection);
+        }
+
+        await createCollection({
+          name: collection,
+          dimension: COLLECTION_DIMENSIONS[collection],
+        });
+      }
+    },
+    [],
+  );
+
   //   const generateEmbedding = (video: Video): number[] => {
   //     // use invoke to generate embedding from video metadata and transcription
   //   };
@@ -226,6 +266,7 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
         getVideos,
         saveSettings,
         getSettings: fetchSettings,
+        clearDatabases,
         settings,
         loading,
       }}

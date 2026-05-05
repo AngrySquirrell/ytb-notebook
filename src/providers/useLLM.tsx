@@ -14,13 +14,15 @@ import {
   upsert,
 } from "@wiscale/tauri-plugin-velesdb";
 import { useDatabase, Video } from "./useDatabase";
+import { IconExternalLink } from "@tabler/icons-react";
+import { NavLink } from "react-router";
+import { Box, Group, UnstyledButton } from "@mantine/core";
 
 const EMBEDDINGS_COLLECTION = "embeddings";
-const EMBEDDINGS_DIMENSION = 2048;
-const DEFAULT_OPENROUTER_EMBEDDING_MODEL =
-  "nvidia/llama-nemotron-embed-vl-1b-v2:free";
+const EMBEDDINGS_DIMENSION = 768;
+const DEFAULT_EMBEDDING_MODEL = "google/gemini-embedding-2-preview";
 
-interface OpenRouterEmbeddingResponse {
+interface GoogleEmbeddingResponse {
   data: {
     embedding: number[];
   }[];
@@ -49,7 +51,7 @@ export interface ChatWithRagResult {
 
 interface UseLLMContextType {
   loading: boolean;
-  error: string | null;
+  error: string | ReactNode | null;
   generateEmbeddingsForVideo: (
     video: Video,
     options?: { model?: string; chunkSize?: number },
@@ -128,11 +130,11 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-async function openRouterEmbeddings(
+async function googleEmbeddings(
   token: string,
   model: string,
   input: string[],
-): Promise<OpenRouterEmbeddingResponse> {
+): Promise<GoogleEmbeddingResponse> {
   const embeddings = await invoke<number[][]>("generate_embedding", {
     apiToken: token,
     model,
@@ -151,7 +153,7 @@ interface LLMProviderProps {
 export function LLMProvider({ children }: LLMProviderProps) {
   const { settings } = useDatabase();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ReactNode | null>(null);
 
   const ensureEmbeddingsCollection = useCallback(async () => {
     const collections = await listCollections();
@@ -171,13 +173,23 @@ export function LLMProvider({ children }: LLMProviderProps) {
     UseLLMContextType["generateEmbeddingsForVideo"]
   >(
     async (video, options) => {
-      const token = settings?.openRouterToken?.trim();
+      const token = settings?.googleEmbedToken?.trim();
       if (!token) {
-        throw new Error("OpenRouter token manquant dans les settings.");
+        setError(
+          <UnstyledButton component={NavLink} to="/settings">
+            <Group gap={4}>
+              Missing Google AI token in settings. Change it here{" "}
+              <Box mt={4} ml={1}>
+                <IconExternalLink size={14} />
+              </Box>
+            </Group>
+          </UnstyledButton>,
+        );
+        throw new Error("Google AI token missing in settings.");
       }
 
-      const embeddingModel = DEFAULT_OPENROUTER_EMBEDDING_MODEL;
-      const chunkSize = options?.chunkSize || 1200;
+      const embeddingModel = DEFAULT_EMBEDDING_MODEL;
+      const chunkSize = options?.chunkSize || 600;
       const source =
         video.transcription || video.captions.map((c) => c.text).join(" ");
       let chunks = chunkText(source, chunkSize);
@@ -209,7 +221,7 @@ export function LLMProvider({ children }: LLMProviderProps) {
 
       try {
         await ensureEmbeddingsCollection();
-        const embeddingsResponse = await openRouterEmbeddings(
+        const embeddingsResponse = await googleEmbeddings(
           token,
           embeddingModel,
           chunks,
@@ -245,33 +257,39 @@ export function LLMProvider({ children }: LLMProviderProps) {
         });
 
         return points.length;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        setError(message);
-        throw e;
       } finally {
         setLoading(false);
       }
     },
-    [ensureEmbeddingsCollection, settings?.openRouterToken],
+    [ensureEmbeddingsCollection, settings?.googleEmbedToken],
   );
 
   const retrieveContext = useCallback<UseLLMContextType["retrieveContext"]>(
     async (question, options) => {
-      const token = settings?.openRouterToken?.trim();
+      const token = settings?.googleEmbedToken?.trim();
       if (!token) {
-        throw new Error("OpenRouter token manquant dans les settings.");
+        setError(
+          <UnstyledButton component={NavLink} to="/settings">
+            <Group gap={4}>
+              Missing Google AI token in settings. Change it here{" "}
+              <Box mt={4} ml={1}>
+                <IconExternalLink size={14} />
+              </Box>
+            </Group>
+          </UnstyledButton>,
+        );
+        throw new Error("Google AI token missing in settings.");
       }
 
       const topK = options?.topK || 5;
-      const embeddingModel = DEFAULT_OPENROUTER_EMBEDDING_MODEL;
+      const embeddingModel = DEFAULT_EMBEDDING_MODEL;
 
       setLoading(true);
       setError(null);
 
       try {
         await ensureEmbeddingsCollection();
-        const embeddingsResponse = await openRouterEmbeddings(
+        const embeddingsResponse = await googleEmbeddings(
           token,
           embeddingModel,
           [question],
@@ -315,15 +333,11 @@ export function LLMProvider({ children }: LLMProviderProps) {
           .slice(0, topK);
 
         return scored;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        setError(message);
-        throw e;
       } finally {
         setLoading(false);
       }
     },
-    [ensureEmbeddingsCollection, settings?.openRouterToken],
+    [ensureEmbeddingsCollection, settings?.googleEmbedToken],
   );
 
   const chatWithRag = useCallback<UseLLMContextType["chatWithRag"]>(

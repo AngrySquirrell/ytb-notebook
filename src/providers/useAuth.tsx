@@ -13,6 +13,8 @@ import {
   SignInOptions,
 } from "@choochmeque/tauri-plugin-google-auth-api";
 import { AuthConfig, UserData } from "../types/auth";
+import { SUCCESS_HTML_RESPONSE } from "../script/constants";
+// import successHTML from "../assets/success.html";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -33,6 +35,8 @@ interface AuthProviderProps {
   config: AuthConfig;
 }
 
+const SIGN_IN_TIMEOUT_MS = 90_000;
+
 export function AuthProvider({ children, config }: AuthProviderProps) {
   const [tokens, setTokens] = useState<TokenResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -50,6 +54,26 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
       console.error("Failed to parse JWT:", err);
       return null;
     }
+  };
+
+  const getSignInErrorMessage = (err: unknown): string => {
+    const message = err instanceof Error ? err.message : String(err || "");
+    const normalized = message.toLowerCase();
+
+    if (
+      normalized.includes("cancel") ||
+      normalized.includes("closed") ||
+      normalized.includes("aborted") ||
+      normalized.includes("denied")
+    ) {
+      return "Connexion annulée ou fenêtre fermée.";
+    }
+
+    if (normalized.includes("timeout")) {
+      return "La connexion a expiré. Réessaie.";
+    }
+
+    return message || "Echec de la connexion Google.";
   };
 
   const restoreSession = useCallback((tokens: TokenResponse) => {
@@ -71,14 +95,33 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
     setLoading(true);
     setError(null);
     try {
+      const desktopCompatibleRedirectUri =
+        config.redirectUri && config.redirectUri.startsWith("http://localhost")
+          ? config.redirectUri
+          : undefined;
+
       const options: SignInOptions = {
         clientId: config.clientId,
         clientSecret: config.clientSecret,
         scopes: config.scopes,
-        redirectUri: config.redirectUri,
+        redirectUri: desktopCompatibleRedirectUri,
+        successHtmlResponse: SUCCESS_HTML_RESPONSE,
       };
 
-      const response = await googleSignIn(options);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              "Sign-in timeout: auth window closed or no response from provider",
+            ),
+          );
+        }, SIGN_IN_TIMEOUT_MS);
+      });
+
+      const response = await Promise.race([
+        googleSignIn(options),
+        timeoutPromise,
+      ]);
       if (!response) throw new Error("User cancelled the sign-in process");
       setTokens(response);
       const idTokenData = _parseJWT(response.idToken!);
@@ -92,9 +135,9 @@ export function AuthProvider({ children, config }: AuthProviderProps) {
       });
 
       console.log("Sign-in successful:", { response, userData: idTokenData });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Sign in failed:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getSignInErrorMessage(err));
     } finally {
       setLoading(false);
     }

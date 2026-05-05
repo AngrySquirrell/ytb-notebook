@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Avatar,
   Button,
   Divider,
@@ -8,12 +9,13 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
-import { useAuth } from "../providers/useAuth";
+import { IconSettings, IconVideoPlus } from "@tabler/icons-react";
 import { NavLink, useNavigate } from "react-router";
-import { IconVideoPlus } from "@tabler/icons-react";
+import { useAuth } from "../providers/useAuth";
 
 const Navbar = () => {
-  const { isAuthenticated, userData, signIn, signOut } = useAuth();
+  const { isAuthenticated, userData, signIn, signOut, loading, error } =
+    useAuth();
   const n = useNavigate();
 
   return (
@@ -106,9 +108,25 @@ const Navbar = () => {
             </Menu.Dropdown>
           </Menu>
         ) : (
-          <Button fullWidth variant="light" onClick={() => signIn()}>
-            Sign in with Google
-          </Button>
+          <Group justify="space-between" w={"100%"} align="center" gap={4}>
+            <Button
+              variant="light"
+              onClick={() => signIn()}
+              flex={"1"}
+              size="md"
+              loading={loading}
+              color={error ? "red" : undefined}
+            >
+              {error ? "Reessayer la connexion" : "Sign in with Google"}
+            </Button>
+            <ActionIcon
+              variant="light"
+              onClick={() => n("/settings")}
+              size={"42px"}
+            >
+              <IconSettings />
+            </ActionIcon>
+          </Group>
         )}
       </div>
     </Stack>

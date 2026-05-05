@@ -12,7 +12,7 @@ import {
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconCheck, IconRobot } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import YoutubeCard from "../components/YoutubeCard";
 import { useDatabase } from "../providers/useDatabase";
 import { useLLM } from "../providers/useLLM";
@@ -30,7 +30,7 @@ const PREVIEW_STEPS = [
 const ANALYZE_STEPS = [
   "Validation de la vidéo",
   "Récupération de la transcription",
-  "Sauvegarde dans VelesDB",
+  "Sauvegarde",
   "Génération des embeddings",
   "Terminé",
 ];
@@ -42,13 +42,13 @@ const Dashboard = () => {
   const { getVideoData, getTranscripts, getAvailableCaptionsList } =
     useYoutube();
   const { saveVideo } = useDatabase();
-  const { generateEmbeddingsForVideo } = useLLM();
+  const { generateEmbeddingsForVideo, error: llmError } = useLLM();
   const [loading, setLoading] = useState(false);
   const [videoData, setVideoData] = useState<YoutubeVideoMetadata | null>(null);
   const [availableCaptions, setAvailableCaptions] =
     useState<YoutubeAvailableCaptions | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | ReactNode | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [currentFlow, setCurrentFlow] = useState<"preview" | "analyze">(
     "preview",
@@ -94,7 +94,9 @@ const Dashboard = () => {
       if (data2) {
         setAvailableCaptions(data2);
       } else {
-        // setError("Impossible de récupérer la liste des sous-titres disponibles");
+        setError(
+          "Impossible de récupérer la liste des sous-titres disponibles",
+        );
         setAvailableCaptions(null);
       }
 
@@ -103,6 +105,12 @@ const Dashboard = () => {
 
     fetchVideo();
   }, [debouncedUrl]);
+
+  useEffect(() => {
+    if (llmError) {
+      setError(llmError);
+    }
+  }, [llmError]);
 
   const renderSelectOption: SelectProps["renderOption"] = ({
     option,
@@ -174,6 +182,7 @@ const Dashboard = () => {
             error={error}
             w={"100%"}
           />
+
           <Box w={180}>{languageSelect}</Box>
         </Flex>
 
@@ -186,8 +195,10 @@ const Dashboard = () => {
               mt="md"
               variant="outline"
               color="blue"
+              loading={currentFlow === "analyze" && loading}
               onClick={async () => {
                 try {
+                  setError(null);
                   setCurrentFlow("analyze");
                   setCurrentStep(0);
                   const youtubeData = handleYoutubeURI(debouncedUrl);
@@ -207,6 +218,11 @@ const Dashboard = () => {
                     youtubeData.id,
                     sanitizedLanguage,
                   );
+
+                  if (!res || !res.captions || !res.chunks) {
+                    setError("Impossible de récupérer la transcription");
+                    return;
+                  }
 
                   const videoToStore = {
                     youtubeUrl: youtubeData.uri,
@@ -229,15 +245,18 @@ const Dashboard = () => {
                   await saveVideo(videoToStore);
 
                   setCurrentStep(3);
-                  await generateEmbeddingsForVideo(videoToStore);
+                  const embeddedCount = await generateEmbeddingsForVideo(
+                    videoToStore,
+                  ).catch(() => null);
+
+                  // LLM errors are surfaced by useLLM.error and mirrored via the llmError useEffect.
+                  if (embeddedCount === null) {
+                    return;
+                  }
 
                   setCurrentStep(4);
                 } catch (e) {
-                  setError(
-                    e instanceof Error
-                      ? e.message
-                      : "Erreur pendant l'analyse de la vidéo",
-                  );
+                  setError("Erreur pendant l'analyse de la vidéo");
                 }
               }}
             >
